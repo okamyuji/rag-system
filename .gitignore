@@ -1,0 +1,75 @@
+# RAG System .gitignore
+
+# 環境変数ファイル
+.env
+.env.local
+.env.production
+
+# データファイル
+data/uploads/*
+data/processed/*
+!data/uploads/.gitkeep
+!data/processed/.gitkeep
+
+# ログファイル
+*.log
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Docker
+.docker/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Database dumps
+*.sql.backup
+*.dump
+
+# Streamlit
+.streamlit/secrets.toml
+.env.bak
+
+# local data
+data/ollama/*
+data/postgres_data/*

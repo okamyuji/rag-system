@@ -1,0 +1,15 @@
+# Web UI
+streamlit==1.49.1
+
+# HTTP クライアント
+requests==2.32.5
+httpx==0.28.1
+
+# ユーティリティ
+plotly==6.3.0
+
+# ファイル処理
+python-multipart==0.0.20
+
+# その他
+python-dotenv==1.1.1

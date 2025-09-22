@@ -1,0 +1,19 @@
+# RAG Service依存関係（Ollama専用・Python 3.13対応）
+fastapi==0.117.1
+uvicorn==0.36.0
+pydantic==2.10.3
+httpx==0.28.1
+loguru==0.7.2
+sqlalchemy==2.0.36
+psycopg==3.2.3
+psycopg-binary==3.2.3
+tiktoken==0.11.0
+numpy==2.2.1
+
+# 埋め込みモデル（Python 3.13対応・軽量版）
+transformers==4.56.2
+torch==2.8.0
+scikit-learn==1.6.0
+
+# その他
+python-multipart==0.0.20

@@ -1,0 +1,138 @@
+services:
+  # PostgreSQL 15 with pg_vector extension and Japanese locale
+  postgres:
+    build:
+      context: ./postgresql
+      dockerfile: Dockerfile
+    container_name: rag-postgres
+    environment:
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpassword
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --locale=ja_JP.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres_data:/var/lib/postgresql/data
+      - ./config/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - rag-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d ragdb"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  # Ollama Service (Local LLM)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - rag-network
+    restart: unless-stopped
+    environment:
+      - OLLAMA_ORIGINS=*
+    healthcheck:
+      test:
+        ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/localhost/11434' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # Document Processing Service
+  document-processor:
+    build:
+      context: ./services/document-processor
+      dockerfile: Dockerfile
+    container_name: rag-document-processor
+    environment:
+      - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
+      - USE_OLLAMA=true
+      - OLLAMA_URL=http://ollama:11434
+      - EMBEDDING_MODEL=nomic-embed-text
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./data/processed:/app/processed
+      - ./services/document-processor:/app # Hot reload用ソースマウント
+    command: ["python", "app.py", "--reload"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # RAG Service (Ollama専用)
+  rag-service:
+    build:
+      context: ./services/rag-service
+      dockerfile: Dockerfile
+    container_name: rag-service
+    environment:
+      - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
+      - USE_OLLAMA=true
+      - OLLAMA_URL=http://ollama:11434
+      - LIGHTWEIGHT_MODE=false
+      - LLM_MODEL=gpt-oss:20b
+      - EMBEDDING_MODEL=nomic-embed-text
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./services/rag-service:/app # Hot reload用ソースマウント
+    command: ["python", "app.py", "--reload"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Web UI
+  web-ui:
+    build:
+      context: ./services/web-ui
+      dockerfile: Dockerfile
+    container_name: rag-web-ui
+    environment:
+      - RAG_SERVICE_URL=http://rag-service:8000
+      - DOCUMENT_PROCESSOR_URL=http://document-processor:8001
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data/uploads:/app/uploads
+      - ./services/web-ui:/app # Hot reload用ソースマウント
+    command:
+      [
+        "streamlit",
+        "run",
+        "app.py",
+        "--server.address",
+        "0.0.0.0",
+        "--server.port",
+        "8501",
+        "--server.fileWatcherType",
+        "poll",
+      ]
+    depends_on:
+      - rag-service
+      - document-processor
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+networks:
+  rag-network:
+    driver: bridge
