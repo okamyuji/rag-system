@@ -48,7 +48,7 @@ class RAGSystemUI:
     def check_service_health(self, service_url: str, service_name: str) -> Dict[str, Any]:
         """サービスの健康状態を詳細チェック"""
         try:
-            response = requests.get(f"{service_url}/health", timeout=10)
+            response = requests.get(f"{service_url}/health", timeout=30)
             if response.status_code == 200:
                 health_data = response.json()
                 return {
@@ -104,7 +104,7 @@ class RAGSystemUI:
         """ドキュメントをアップロード"""
         try:
             files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-            response = requests.post(f"{self.doc_url}/upload", files=files)
+            response = requests.post(f"{self.doc_url}/upload", files=files, timeout=60)
             
             if response.status_code == 200:
                 return {"success": True, "data": response.json()}
@@ -117,7 +117,7 @@ class RAGSystemUI:
     def get_documents(self) -> List[Dict[str, Any]]:
         """ドキュメント一覧を取得"""
         try:
-            response = requests.get(f"{self.doc_url}/documents")
+            response = requests.get(f"{self.doc_url}/documents", timeout=30)
             if response.status_code == 200:
                 return response.json().get("documents", [])
             return []
@@ -127,7 +127,7 @@ class RAGSystemUI:
     def delete_document(self, document_id: int) -> bool:
         """ドキュメントを削除"""
         try:
-            response = requests.delete(f"{self.doc_url}/documents/{document_id}")
+            response = requests.delete(f"{self.doc_url}/documents/{document_id}", timeout=30)
             return response.status_code == 200
         except Exception:
             return False
@@ -138,9 +138,9 @@ class RAGSystemUI:
             data = {
                 "query": query,
                 "max_chunks": max_results,
-                "similarity_threshold": 0.7
+                "similarity_threshold": 0.5
             }
-            response = requests.post(f"{self.rag_url}/search", json=data)
+            response = requests.post(f"{self.rag_url}/search", json=data, timeout=60)
             
             if response.status_code == 200:
                 return {"success": True, "data": response.json()}
@@ -156,9 +156,9 @@ class RAGSystemUI:
             data = {
                 "query": question,
                 "max_chunks": 5,
-                "similarity_threshold": 0.7
+                "similarity_threshold": 0.5
             }
-            response = requests.post(f"{self.rag_url}/query", json=data)
+            response = requests.post(f"{self.rag_url}/query", json=data, timeout=120)
             
             if response.status_code == 200:
                 return {"success": True, "data": response.json()}
@@ -171,7 +171,7 @@ class RAGSystemUI:
     def get_conversation_history(self, session_id: str) -> List[Dict[str, Any]]:
         """会話履歴を取得"""
         try:
-            response = requests.get(f"{self.rag_url}/conversations/{session_id}")
+            response = requests.get(f"{self.rag_url}/conversations/{session_id}", timeout=30)
             if response.status_code == 200:
                 return response.json().get("conversations", [])
             return []
@@ -181,7 +181,7 @@ class RAGSystemUI:
     def get_system_stats(self) -> Dict[str, Any]:
         """システム統計を取得"""
         try:
-            response = requests.get(f"{self.rag_url}/stats")
+            response = requests.get(f"{self.rag_url}/stats", timeout=30)
             if response.status_code == 200:
                 return response.json()
             return {}

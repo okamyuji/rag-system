@@ -42,6 +42,7 @@ USE_OLLAMA = os.getenv("USE_OLLAMA", "true").lower() == "true"
 # OCRリーダーを初期化（日本語対応）
 ocr_reader = easyocr.Reader(['ja', 'en'], gpu=False)
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
 UPLOAD_DIR = Path("/app/uploads")
 PROCESSED_DIR = Path("/app/processed")
 
@@ -322,23 +323,104 @@ async def delete_document(document_id: int):
     finally:
         session.close()
 
-def extract_text_with_ocr(image_path: str) -> str:
-    """OCRで画像からテキストを抽出（日本語対応）"""
+def preprocess_image_for_ocr(image_path: str) -> str:
+    """OCR用画像前処理 - 品質向上とノイズ除去"""
     try:
-        # EasyOCRを使用（より高精度）
-        results = ocr_reader.readtext(image_path)
+        import cv2
+        import numpy as np
+        from PIL import ImageEnhance, ImageFilter
+
+        # PILで画像を開く
+        img = Image.open(image_path)
+        
+        # グレースケール変換
+        if img.mode != 'L':
+            img = img.convert('L')
+        
+        # 解像度向上（2倍にリサイズ）
+        width, height = img.size
+        img = img.resize((width * 2, height * 2), Image.LANCZOS)
+        
+        # コントラスト強化
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(2.0)
+        
+        # シャープネス強化
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(2.0)
+        
+        # ノイズ除去フィルタ
+        img = img.filter(ImageFilter.MedianFilter(size=3))
+        
+        # OpenCVで更なる前処理
+        img_array = np.array(img)
+        
+        # ガウシアンブラーでノイズ除去
+        img_array = cv2.GaussianBlur(img_array, (1, 1), 0)
+        
+        # 二値化（OTSU手法）
+        _, img_array = cv2.threshold(img_array, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # モルフォロジー処理でノイズ除去
+        kernel = np.ones((2, 2), np.uint8)
+        img_array = cv2.morphologyEx(img_array, cv2.MORPH_CLOSE, kernel)
+        
+        # 前処理済み画像を一時保存
+        processed_img = Image.fromarray(img_array)
+        processed_path = image_path.replace('.png', '_processed.png').replace('.jpg', '_processed.jpg')
+        processed_img.save(processed_path)
+        
+        return processed_path
+        
+    except Exception as e:
+        logger.warning(f"画像前処理エラー: {e}")
+        return image_path  # 前処理失敗時は元画像を返す
+
+def extract_text_with_ocr(image_path: str) -> str:
+    """OCRで画像からテキストを抽出（日本語対応・強化版）"""
+    try:
+        # 画像前処理を実行
+        processed_path = preprocess_image_for_ocr(image_path)
+        
+        # EasyOCRを使用（前処理済み画像で）
+        results = ocr_reader.readtext(processed_path)
         text = ""
         for (bbox, text_content, confidence) in results:
-            if confidence > 0.5:  # 信頼度50%以上のテキストのみ採用
+            if confidence > 0.3:  # 信頼度閾値を下げて、より多くのテキストを取得
                 text += text_content + " "
         
-        # 結果が不十分な場合はTesseractでフォールバック
-        if len(text.strip()) < 10:
-            logger.info("EasyOCRの結果が不十分、Tesseractでフォールバック")
-            img = Image.open(image_path)
-            text = pytesseract.image_to_string(img, lang='jpn+eng')
+        # EasyOCRで不十分な場合はTesseractで詳細処理
+        if len(text.strip()) < 15:
+            logger.info("EasyOCRの結果が不十分、強化版Tesseractで処理")
+            img = Image.open(processed_path)
+            
+            # Tesseractの詳細設定（日本語最適化）
+            custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzあいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをんがぎぐげござじずぜぞだぢづでどばびぶべぼぱぴぷぺぽァィゥェォャュョッアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲンガギグゲゴザジズゼゾダヂヅデドバビブベボパピプペポ一二三四五六七八九十百千万億兆　、。（）「」【】～・'
+            
+            # 複数のPSMモードで試行
+            for psm in [6, 7, 8, 13]:
+                try:
+                    config = f'--oem 3 --psm {psm}'
+                    text_tesseract = pytesseract.image_to_string(img, lang='jpn+eng', config=config)
+                    if len(text_tesseract.strip()) > len(text.strip()):
+                        text = text_tesseract
+                        logger.info(f"Tesseract PSM {psm}で最良結果: {len(text)} 文字")
+                        break
+                except Exception as psm_error:
+                    logger.warning(f"Tesseract PSM {psm} エラー: {psm_error}")
+                    continue
         
-        return text.strip()
+        # 一時ファイルのクリーンアップ
+        if processed_path != image_path and os.path.exists(processed_path):
+            try:
+                os.unlink(processed_path)
+            except:
+                pass
+        
+        result_text = text.strip()
+        logger.info(f"OCR結果: {len(result_text)} 文字抽出")
+        return result_text
+        
     except Exception as e:
         logger.error(f"OCRエラー: {e}")
         return ""
@@ -355,26 +437,44 @@ def extract_text_from_pdf(file_path: Path) -> str:
                 text += page_text + "\n"
         
         # テキストが十分抽出できた場合はそのまま返す
-        if len(text.strip()) > 50:
+        if len(text.strip()) > 100:
             return text.strip()
         
         # テキストが少ない場合はOCRを使用
-        logger.info("PDF内のテキストが少ないため、OCRを使用します")
+        logger.info("PDF内のテキストが少ないため、高品質OCRを使用します")
         try:
-            # PDFを画像に変換してOCR処理
-            images = convert_from_path(file_path)
+            # PDFを高解像度画像に変換してOCR処理
+            images = convert_from_path(file_path, dpi=300, fmt='png')  # 高解像度でPNG変換
             ocr_text = ""
-            for i, image in enumerate(images):
-                # 一時的に画像を保存
-                temp_image_path = f"/tmp/pdf_page_{i}.png"
-                image.save(temp_image_path, 'PNG')
-                # OCRでテキスト抽出
-                page_ocr_text = extract_text_with_ocr(temp_image_path)
-                ocr_text += f"ページ {i+1}:\n{page_ocr_text}\n\n"
-                # 一時ファイルを削除
-                os.unlink(temp_image_path)
             
-            return ocr_text.strip() if ocr_text.strip() else text.strip()
+            logger.info(f"PDF {len(images)}ページを高品質OCRで処理中...")
+            
+            for i, image in enumerate(images):
+                # 一時的に画像を保存（高品質PNG）
+                temp_image_path = f"/tmp/pdf_page_{i+1}.png"
+                image.save(temp_image_path, 'PNG', optimize=False, quality=100)
+                
+                # 強化されたOCRでテキスト抽出
+                page_ocr_text = extract_text_with_ocr(temp_image_path)
+                
+                if page_ocr_text.strip():
+                    ocr_text += f"ページ {i+1}:\n{page_ocr_text}\n\n"
+                    logger.info(f"ページ {i+1}: {len(page_ocr_text)} 文字抽出成功")
+                else:
+                    logger.warning(f"ページ {i+1}: テキスト抽出失敗")
+                
+                # 一時ファイルを削除
+                try:
+                    os.unlink(temp_image_path)
+                except:
+                    pass
+            
+            if len(ocr_text.strip()) > len(text.strip()):
+                logger.info(f"OCR成功: {len(ocr_text)} 文字抽出 (元: {len(text)} 文字)")
+                return ocr_text.strip()
+            else:
+                logger.warning("OCRでも改善なし、元のテキストを返します")
+                return text.strip()
         
         except Exception as ocr_error:
             logger.error(f"PDF OCRエラー: {ocr_error}")
@@ -601,7 +701,7 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient() as client:
             # モデル一覧取得
-            response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=10.0)
+            response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=30.0)
             if response.status_code != 200:
                 return {"ready": False, "status": "ollama_unavailable", "message": "Ollama接続不可"}
             
@@ -637,14 +737,14 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
                 test_response = await client.post(
                     f"{OLLAMA_URL}/api/embeddings",
                     json={"model": matched_model, "prompt": "test"},
-                    timeout=30.0
+                    timeout=60.0
                 )
             else:
                 # LLMモデルの場合はgenerateエンドポイントでテスト
                 test_response = await client.post(
                     f"{OLLAMA_URL}/api/generate",
                     json={"model": matched_model, "prompt": "test", "stream": False},
-                    timeout=30.0
+                    timeout=60.0
                 )
             
             if test_response.status_code == 200:
@@ -662,7 +762,7 @@ async def get_embeddings_ollama(text: str) -> List[float]:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{OLLAMA_URL}/api/embeddings",
-                json={"model": "nomic-embed-text", "prompt": text},
+                json={"model": EMBEDDING_MODEL, "prompt": text},
                 timeout=30.0
             )
             if response.status_code == 200:
@@ -726,8 +826,8 @@ async def process_document(file_path: Path, filename: str):
             logger.warning(f"テキストが抽出できませんでした: {filename}")
             return
         
-        # チャンク分割（簡易版）
-        chunks = [content[i:i+1000] for i in range(0, len(content), 800)]
+        # チャンク分割（改良版）- より小さなチャンクで精度向上
+        chunks = [content[i:i+600] for i in range(0, len(content), 400)]
         
         # データベース保存準備
         session = SessionLocal()

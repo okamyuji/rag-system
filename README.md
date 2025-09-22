@@ -23,8 +23,9 @@ PostgreSQL 15 + pg_vector を使用した高性能な日本語対応RAG（Retrie
 
 ### 🔍 埋め込みモデル  
 
-- **nomic-embed-text**: 768次元ベクトル生成
+- **nomic-embed-text:latest**: 768次元ベクトル生成
 - 高精度な意味的検索を実現
+- 日本語テキストに最適化済み
 
 ### 📊 モデル性能比較
 
@@ -35,7 +36,7 @@ PostgreSQL 15 + pg_vector を使用した高性能な日本語対応RAG（Retrie
 | **⚡ レスポンス** | 5-10秒 | 3-8秒 |
 | **🔒 プライバシー** | 完全ローカル | 完全ローカル |
 | **🌐 オフライン** | 可能 | 可能 |
-| **📊 リソース** | 16GB+ RAM推奨 | 16GB+ RAM |
+| **📊 リソース** | 30GB+ RAM推奨 | 16GB+ RAM |
 | **🔧 カスタマイズ** | 完全自由 | 完全自由 |
 
 ## 🏗️ システム構成
@@ -102,7 +103,8 @@ graph TB
 ### 前提条件
 
 - Docker Desktop がインストールされていること
-- 16GB以上のRAM推奨
+- **30GB以上のRAM推奨**（Ollama LLMモデル用）
+- 50GB以上の空きディスク容量（モデルファイル用）
 
 ### 📋 セットアップ
 
@@ -214,6 +216,28 @@ docker compose down -v && docker compose up -d
 
 ### 🐛 トラブルシューティング
 
+#### 🚨 メモリ不足による起動失敗
+
+本システムは大型LLMモデル（gpt-oss:20b）を使用するため、十分なメモリが必要です：
+
+```bash
+# 現在のメモリ使用量確認
+docker stats
+
+# Dockerのメモリ制限確認
+docker info | grep -i memory
+
+# システムメモリ確認（Linux/macOS）
+free -h  # Linux
+vm_stat | grep free  # macOS
+```
+
+**メモリ不足の場合の対処法：**
+
+1. **他のアプリケーションを終了**
+2. **Docker Desktopのメモリ制限を増加**（設定 > Resources > Memory）
+3. **軽量モデルの使用**（必要に応じて）
+
 #### サービスが起動しない場合
 
 ```bash
@@ -231,26 +255,71 @@ docker compose logs
 curl -X POST http://localhost:11434/api/pull -d '{"name":"gpt-oss:20b"}'
 
 # 埋め込みモデルを手動でダウンロード
-curl -X POST http://localhost:11434/api/pull -d '{"name":"nomic-embed-text"}'
+curl -X POST http://localhost:11434/api/pull -d '{"name":"nomic-embed-text:latest"}'
 
 # モデル一覧確認
 curl http://localhost:11434/api/tags
 ```
 
-#### メモリ不足エラー
+#### 📊 メモリ最適化とパフォーマンス調整
 
 ```bash
-# Dockerのメモリ使用量確認
-docker stats
+# リアルタイムメモリ使用量監視
+docker stats --no-stream
 
-# 不要なイメージ・コンテナ削除
-docker system prune
+# Ollamaメモリ使用量調整（compose.yml）
+# OLLAMA_MAX_LOADED_MODELS=1  # 同時読み込みモデル数制限
+# OLLAMA_KEEP_ALIVE=5m        # メモリ保持時間短縮
 
-# 軽量モデルに変更（必要に応じて）
-# .envファイルでLLM_MODELを軽量版に変更
+# システム全体のメモリクリーンアップ
+docker system prune -f
+docker volume prune -f
+
+# 大型ファイルの確認
+du -sh ./data/*
 ```
 
+**🔧 パフォーマンス最適化設定：**
+
+1. **Ollama設定調整**：
+   - `OLLAMA_NUM_PARALLEL=2`: 並列処理数を制限
+   - `OLLAMA_KEEP_ALIVE=5m`: メモリ保持時間を短縮
+
+2. **サービスリソース制限**：
+   - RAG Service: 1GB制限
+   - Document Processor: 2GB制限  
+   - Ollama: 24GB制限（必要に応じて調整）
+
 ## 📊 最適化のベストプラクティス
+
+### ⚡ パフォーマンス監視とメモリ管理
+
+#### リアルタイム監視
+
+```bash
+# サービス別メモリ使用量
+docker stats --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}"
+
+# Ollamaモデル読み込み状況
+curl -s http://localhost:11434/api/ps
+
+# システム全体のヘルス状況
+curl -s http://localhost:8000/health | jq .
+curl -s http://localhost:8001/health | jq .
+```
+
+#### 📈 予想されるメモリ使用量
+
+| コンポーネント | アイドル時 | 処理中 | 備考 |
+|---|---|---|---|
+| **Ollama (LLM)** | 13-15GB | 16-20GB | gpt-oss:20b読み込み時 |
+| **Ollama (Embed)** | 270MB | 500MB | nomic-embed-text使用時 |
+| **PostgreSQL** | 200MB | 500MB | ベクトルデータベース |
+| **RAG Service** | 100MB | 300MB | 質問応答処理時 |
+| **Document Processor** | 150MB | 800MB | ファイル処理時（LibreOffice含む） |
+| **Web UI** | 50MB | 100MB | Streamlit |
+| **システム予約** | 2GB | 4GB | Docker オーバーヘッド |
+| **合計** | **16-18GB** | **22-26GB** | **推奨30GB** |
 
 ### プロンプトエンジニアリング
 
@@ -318,9 +387,19 @@ docker system prune
 #### システム要件
 
 - **OS**: Docker対応OS（Linux, macOS, Windows）
-- **RAM**: 8GB以上推奨（最小4GB）
-- **ストレージ**: 10GB以上の空き容量
-- **CPU**: マルチコア推奨
+- **RAM**: **30GB以上推奨**（Ollama LLMモデル用）
+    - gpt-oss:20b: ~13GB
+    - nomic-embed-text: ~270MB  
+    - PostgreSQL + サービス: ~2GB
+    - システム予約: ~14GB
+- **ストレージ**: **50GB以上の空き容量**
+    - Dockerイメージ: ~5GB
+    - Ollamaモデル: ~14GB
+    - データベース: ~1GB
+    - ログ・一時ファイル: ~5GB
+    - 処理ファイル用: ~25GB
+- **CPU**: **マルチコア推奨**（最低4コア、8コア以上推奨）
+- **ネットワーク**: 初回セットアップ時のみインターネット接続が必要（モデルダウンロード用）
 
 #### 使用技術スタック
 
@@ -329,7 +408,7 @@ docker system prune
 - **バックエンド**: FastAPI (Python 3.13)
 - **フロントエンド**: Streamlit
 - **LLM**: Ollama (gpt-oss:20b)
-- **埋め込み**: nomic-embed-text (768次元)
+- **埋め込み**: nomic-embed-text:latest (768次元)
 - **日本語処理**: Janome
 
 ## 📄 ライセンス

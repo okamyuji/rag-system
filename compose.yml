@@ -38,13 +38,25 @@ services:
     restart: unless-stopped
     environment:
       - OLLAMA_ORIGINS=*
+      - OLLAMA_MAX_LOADED_MODELS=2
+      - OLLAMA_KEEP_ALIVE=5m
+      - OLLAMA_NUM_PARALLEL=2
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+        reservations:
+          memory: 8G
     healthcheck:
       test:
-        ["CMD-SHELL", "timeout 5 bash -c '</dev/tcp/localhost/11434' || exit 1"]
-      interval: 30s
-      timeout: 10s
+        [
+          "CMD-SHELL",
+          "timeout 10 bash -c '</dev/tcp/localhost/11434' || exit 1",
+        ]
+      interval: 45s
+      timeout: 20s
       retries: 5
-      start_period: 60s
+      start_period: 180s
 
   # Document Processing Service
   document-processor:
@@ -56,7 +68,7 @@ services:
       - DATABASE_URL=postgresql://raguser:ragpassword@postgres:5432/ragdb
       - USE_OLLAMA=true
       - OLLAMA_URL=http://ollama:11434
-      - EMBEDDING_MODEL=nomic-embed-text
+      - EMBEDDING_MODEL=nomic-embed-text:latest
     ports:
       - "8001:8001"
     volumes:
@@ -72,6 +84,24 @@ services:
     networks:
       - rag-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=10)",
+        ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
 
   # RAG Service (Ollama専用)
   rag-service:
@@ -85,7 +115,7 @@ services:
       - OLLAMA_URL=http://ollama:11434
       - LIGHTWEIGHT_MODE=false
       - LLM_MODEL=gpt-oss:20b
-      - EMBEDDING_MODEL=nomic-embed-text
+      - EMBEDDING_MODEL=nomic-embed-text:latest
     ports:
       - "8000:8000"
     volumes:
@@ -99,6 +129,24 @@ services:
     networks:
       - rag-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=10)",
+        ]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 120s
 
   # Web UI
   web-ui:

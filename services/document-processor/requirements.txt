@@ -28,3 +28,4 @@ pdf2image==1.17.0
 # OCR（日本語対応）
 easyocr==1.7.2
 pytesseract==0.3.13
+opencv-python==4.10.0.84

@@ -30,7 +30,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 USE_OLLAMA = os.getenv("USE_OLLAMA", "true").lower() == "true"
 LIGHTWEIGHT_MODE = os.getenv("LIGHTWEIGHT_MODE", "false").lower() == "true"
 LLM_MODEL = os.getenv("LLM_MODEL", "japanese-stablelm:3b-instruct")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "multilingual-e5-large")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
 
 # psycopg3対応のデータベース接続
 if DATABASE_URL:
@@ -59,12 +59,12 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     query: str
     max_chunks: Optional[int] = 5
-    similarity_threshold: Optional[float] = 0.7
+    similarity_threshold: Optional[float] = 0.5
 
 class SearchRequest(BaseModel):
     query: str
     max_chunks: Optional[int] = 5
-    similarity_threshold: Optional[float] = 0.7
+    similarity_threshold: Optional[float] = 0.5
 
 class QueryResponse(BaseModel):
     answer: str
@@ -180,7 +180,7 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient() as client:
             # モデル一覧取得
-            response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=10.0)
+            response = await client.get(f"{OLLAMA_URL}/api/tags", timeout=30.0)
             if response.status_code != 200:
                 return {"ready": False, "status": "ollama_unavailable", "message": "Ollama接続不可"}
             
@@ -211,27 +211,44 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
             if not model_found:
                 return {"ready": False, "status": "model_not_found", "message": f"モデル '{model_name}' が見つかりません"}
             
-            # モデルの実際のテスト実行（軽量テスト）
-            test_response = await client.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={
-                    "model": matched_model,
-                    "prompt": "hi",
-                    "stream": False,
-                    "options": {
-                        "num_predict": 1  # 1トークンのみ生成してテスト
-                    }
-                },
-                timeout=15.0
-            )
+            # 埋め込みモデルの場合は埋め込みAPIでテスト
+            if "embed" in model_name.lower():
+                test_response = await client.post(
+                    f"{OLLAMA_URL}/api/embeddings",
+                    json={"model": matched_model, "prompt": "test"},
+                    timeout=30.0
+                )
+            else:
+                # モデルの実際のテスト実行（軽量テスト）
+                test_response = await client.post(
+                    f"{OLLAMA_URL}/api/generate",
+                    json={
+                        "model": matched_model,
+                        "prompt": "hi",
+                        "stream": False,
+                        "options": {
+                            "num_predict": 1  # 1トークンのみ生成してテスト
+                        }
+                    },
+                    timeout=60.0
+                )
             
             if test_response.status_code == 200:
                 result = test_response.json()
-                if result.get("response") is not None and "error" not in result:
-                    return {"ready": True, "status": "ready", "message": f"モデル '{matched_model}' 準備完了"}
+                # 埋め込みモデルの場合はembeddingフィールドをチェック
+                if "embed" in model_name.lower():
+                    if result.get("embedding") is not None and "error" not in result:
+                        return {"ready": True, "status": "ready", "message": f"モデル '{matched_model}' 準備完了"}
+                    else:
+                        error_msg = result.get("error", "不明なエラー")
+                        return {"ready": False, "status": "model_error", "message": f"モデル '{matched_model}' エラー: {error_msg}"}
                 else:
-                    error_msg = result.get("error", "不明なエラー")
-                    return {"ready": False, "status": "model_error", "message": f"モデル '{matched_model}' エラー: {error_msg}"}
+                    # LLMモデルの場合はresponseフィールドをチェック
+                    if result.get("response") is not None and "error" not in result:
+                        return {"ready": True, "status": "ready", "message": f"モデル '{matched_model}' 準備完了"}
+                    else:
+                        error_msg = result.get("error", "不明なエラー")
+                        return {"ready": False, "status": "model_error", "message": f"モデル '{matched_model}' エラー: {error_msg}"}
             else:
                 return {"ready": False, "status": "model_loading", "message": f"モデル '{matched_model}' 読み込み中"}
                 
