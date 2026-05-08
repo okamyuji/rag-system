@@ -17,12 +17,12 @@ torch==2.8.0
 scikit-learn==1.6.0
 
 # ドキュメント処理
-python-multipart==0.0.20
+python-multipart==0.0.27
 python-docx==1.1.2
 openpyxl==3.1.5
 PyPDF2==3.0.1
 python-pptx==1.0.2
-Pillow==11.3.0
+Pillow==12.2.0
 pdf2image==1.17.0
 
 # OCR（日本語対応）

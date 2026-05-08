@@ -9,7 +9,7 @@ httpx==0.28.1
 plotly==6.3.0
 
 # ファイル処理
-python-multipart==0.0.20
+python-multipart==0.0.27
 
 # その他
 python-dotenv==1.1.1

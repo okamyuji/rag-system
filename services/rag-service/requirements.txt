@@ -16,4 +16,4 @@ torch==2.8.0
 scikit-learn==1.6.0
 
 # その他
-python-multipart==0.0.20
+python-multipart==0.0.27
