@@ -11,7 +11,7 @@ tiktoken==0.11.0
 numpy==2.2.1
 
 # 埋め込みモデル（Python 3.13対応・軽量版）
-transformers==4.56.2
+transformers==5.0.0rc3
 torch==2.8.0
 scikit-learn==1.6.0
 
