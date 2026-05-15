@@ -20,7 +20,7 @@ import easyocr
 import httpx
 import openpyxl
 # ドキュメント処理用ライブラリ
-import PyPDF2
+import pypdf
 import pytesseract
 import uvicorn
 from docx import Document
@@ -430,7 +430,7 @@ def extract_text_from_pdf(file_path: Path) -> str:
     try:
         # まず通常のテキスト抽出を試行
         with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
+            reader = pypdf.PdfReader(file)
             text = ""
             for page in reader.pages:
                 page_text = page.extract_text()
