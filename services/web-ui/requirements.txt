@@ -1,5 +1,5 @@
 # Web UI
-streamlit==1.49.1
+streamlit==1.54.0
 
 # HTTP クライアント
 requests==2.33.0
