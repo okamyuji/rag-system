@@ -430,7 +430,7 @@ def extract_text_from_pdf(file_path: Path) -> str:
     try:
         # まず通常のテキスト抽出を試行
         with open(file_path, 'rb') as file:
-            reader = pypdf.PdfReader(file)
+            reader = pypdf.PdfReader(file, password="")
             text = ""
             for page in reader.pages:
                 page_text = page.extract_text()
