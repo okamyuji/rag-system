@@ -201,10 +201,11 @@ async def test_ollama():
                     "error": f"Ollama API応答エラー: {response.status_code}"
                 }
     except Exception as e:
+        logger.error(f"Ollama接続テストエラー: {e}")
         return {
             "status": "error",
             "ollama_url": OLLAMA_URL,
-            "error": str(e)
+            "error": "Ollama接続テストに失敗しました"
         }
 
 @app.get("/documents")
@@ -234,7 +235,7 @@ async def get_documents():
             return {"documents": documents, "count": len(documents)}
     except Exception as e:
         logger.error(f"ドキュメント一覧取得エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"ドキュメント一覧取得に失敗しました: {str(e)}")
+        raise HTTPException(status_code=500, detail="ドキュメント一覧取得に失敗しました")
 
 @app.get("/documents/{document_id}")
 async def get_document(document_id: int):
@@ -268,7 +269,7 @@ async def get_document(document_id: int):
         raise
     except Exception as e:
         logger.error(f"ドキュメント取得エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"ドキュメント取得に失敗しました: {str(e)}")
+        raise HTTPException(status_code=500, detail="ドキュメント取得に失敗しました")
 
 @app.delete("/documents/{document_id}")
 async def delete_document(document_id: int):
@@ -319,7 +320,7 @@ async def delete_document(document_id: int):
     except Exception as e:
         session.rollback()
         logger.error(f"ドキュメント削除エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"ドキュメント削除に失敗しました: {str(e)}")
+        raise HTTPException(status_code=500, detail="ドキュメント削除に失敗しました")
     finally:
         session.close()
 
@@ -754,7 +755,7 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
                 
     except Exception as e:
         logger.error(f"モデル準備状況確認エラー: {e}")
-        return {"ready": False, "status": "error", "message": f"エラー: {str(e)}"}
+        return {"ready": False, "status": "error", "message": "モデル準備状況の確認に失敗しました"}
 
 async def get_embeddings_ollama(text: str) -> List[float]:
     """Ollamaで埋め込みベクトルを生成"""
@@ -813,7 +814,7 @@ async def upload_document(background_tasks: BackgroundTasks, file: UploadFile = 
         
     except Exception as e:
         logger.error(f"アップロードエラー: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="アップロード処理に失敗しました")
 
 async def process_document(file_path: Path, filename: str):
     """ドキュメント処理（非同期）"""
