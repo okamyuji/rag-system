@@ -13,7 +13,7 @@ janome==0.5.0
 
 # 埋め込みモデル（Python 3.13対応・軽量版）
 transformers==5.0.0rc3
-torch==2.8.0
+torch==2.12.0
 scikit-learn==1.6.0
 
 # ドキュメント処理
