@@ -577,7 +577,7 @@ async def get_stats():
         }
     except Exception as e:
         logger.error(f"統計取得エラー: {e}")
-        return {"error": "統計情報の取得に失敗しました"}
+        raise HTTPException(status_code=500, detail="統計情報の取得に失敗しました")
     finally:
         session.close()
 
