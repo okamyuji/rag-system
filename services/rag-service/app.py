@@ -254,7 +254,7 @@ async def check_ollama_model_ready(model_name: str) -> Dict[str, Any]:
                 
     except Exception as e:
         logger.error(f"モデル準備状況確認エラー: {e}")
-        return {"ready": False, "status": "error", "message": f"エラー: {str(e)}"}
+        return {"ready": False, "status": "error", "message": "モデル準備状況の確認に失敗しました"}
 
 def parse_llm_response_with_confidence(response: str) -> Optional[Dict[str, Any]]:
     """LLM応答から自信度を抽出し、閾値チェックを行う"""
@@ -454,7 +454,7 @@ async def search_documents(request: SearchRequest):
         raise
     except Exception as e:
         logger.error(f"検索エラー: {e}")
-        raise HTTPException(status_code=500, detail=f"検索処理中にエラーが発生しました: {str(e)}")
+        raise HTTPException(status_code=500, detail="検索処理中にエラーが発生しました")
 
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest):
@@ -525,7 +525,7 @@ async def query_documents(request: QueryRequest):
         
     except Exception as e:
         logger.error(f"クエリ処理エラー: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="クエリ処理中にエラーが発生しました")
 
 async def save_conversation(question: str, answer: str, sources: List[Dict]):
     """会話履歴を保存"""
@@ -577,7 +577,7 @@ async def get_stats():
         }
     except Exception as e:
         logger.error(f"統計取得エラー: {e}")
-        return {"error": str(e)}
+        return {"error": "統計情報の取得に失敗しました"}
     finally:
         session.close()
 
