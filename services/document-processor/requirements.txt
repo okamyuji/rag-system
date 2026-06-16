@@ -12,7 +12,7 @@ numpy==2.2.1
 janome==0.5.0
 
 # ドキュメント処理
-python-multipart==0.0.27
+python-multipart==0.0.31
 python-docx==1.1.2
 openpyxl==3.1.5
 pypdf==6.12.0
