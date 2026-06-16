@@ -11,4 +11,4 @@ tiktoken==0.11.0
 numpy==2.2.1
 
 # その他
-python-multipart==0.0.27
+python-multipart==0.0.31
