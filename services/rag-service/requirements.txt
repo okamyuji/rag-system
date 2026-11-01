@@ -1,14 +1,14 @@
 # RAG Service依存関係（Ollama専用・Python 3.13対応）
-fastapi==0.117.1
-uvicorn==0.36.0
-pydantic==2.10.3
+fastapi==0.162.0
+uvicorn==0.54.0
+pydantic==2.14.1
 httpx==0.28.1
-loguru==0.7.2
-sqlalchemy==2.0.36
-psycopg==3.2.3
-psycopg-binary==3.2.3
-tiktoken==0.11.0
-numpy==2.2.1
+loguru==0.7.3
+sqlalchemy==2.1.6
+psycopg==3.3.6
+psycopg-binary==3.3.6
+tiktoken==0.14.0
+numpy==2.5.4
 
 # その他
-python-multipart==0.0.31
+python-multipart==0.0.32
