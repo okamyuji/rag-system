@@ -87,7 +87,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 3G # OCR の最大 2150MiB に、アプリ本体の分の余裕を足す
         reservations:
           memory: 512M
     healthcheck:

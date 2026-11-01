@@ -5,9 +5,6 @@ streamlit==1.66.1
 requests==2.34.2
 httpx==0.28.1
 
-# ユーティリティ
-plotly==7.1.0
-
 # ファイル処理
 python-multipart==0.0.32
 
