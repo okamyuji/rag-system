@@ -338,9 +338,10 @@ def preprocess_image_for_ocr(image_path: str) -> str:
         if img.mode != 'L':
             img = img.convert('L')
         
-        # 解像度向上（2倍にリサイズ）
+        # 小さい画像だけ 2 倍にする。PDF のページはもう十分大きく、広げても処理とメモリが増えるだけ
         width, height = img.size
-        img = img.resize((width * 2, height * 2), Image.LANCZOS)
+        if max(width, height) < 1600:
+            img = img.resize((width * 2, height * 2), Image.LANCZOS)
         
         # コントラスト強化
         enhancer = ImageEnhance.Contrast(img)
@@ -384,7 +385,8 @@ def extract_text_with_ocr(image_path: str) -> str:
         processed_path = preprocess_image_for_ocr(image_path)
         
         # EasyOCRを使用（前処理済み画像で）
-        results = ocr_reader.readtext(processed_path)
+        # 既定の canvas_size 2560 では、300dpi の A4 1 ページで 4GB を超えて落ちる。1280 なら最大 2150MiB（読み取り器の 1297MiB を含む）
+        results = ocr_reader.readtext(processed_path, canvas_size=1280)
         text = ""
         for (bbox, text_content, confidence) in results:
             if confidence > 0.3:  # 信頼度閾値を下げて、より多くのテキストを取得
@@ -431,7 +433,8 @@ def extract_text_from_pdf(file_path: Path) -> str:
     try:
         # まず通常のテキスト抽出を試行
         with open(file_path, 'rb') as file:
-            reader = pypdf.PdfReader(file, password="")
+            # password を渡すと、暗号のない PDF で "Not an encrypted file" になる。空パスワードの暗号つき PDF は渡さなくても開ける
+            reader = pypdf.PdfReader(file)
             text = ""
             for page in reader.pages:
                 page_text = page.extract_text()
