@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # 各サービスを本番と同じ Dockerfile でビルドし、依存を入れた image の中で app を import する
+  service:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [document-processor, rag-service, web-ui]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # easyocr が引き込む torch で document-processor の image は十数 GB になり、ランナーの空きを超える
+      - name: Free disk space
+        if: matrix.service == 'document-processor'
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL && df -h /
+      - run: docker build -t "ci-$SERVICE" "services/$SERVICE"
+        env:
+          SERVICE: ${{ matrix.service }}
+      # create_engine は接続しないので、DB のない URL で import できる
+      - run: docker run --rm -e DATABASE_URL=postgresql+psycopg://ci@127.0.0.1:5432/ci "ci-$SERVICE" python -c "import app"
+        env:
+          SERVICE: ${{ matrix.service }}
+
+  security:
+    uses: okamyuji/reusable-workflows/.github/workflows/security-scan.yml@v1
