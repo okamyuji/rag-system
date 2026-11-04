@@ -6,7 +6,7 @@ requests==2.34.2
 httpx==0.28.1
 
 # ファイル処理
-python-multipart==0.0.32
+python-multipart==0.0.33
 
 # その他
 python-dotenv==1.2.4
